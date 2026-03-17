@@ -5,6 +5,7 @@ import { auth, db } from "@/lib/firebase";
 import { collection, addDoc, onSnapshot, query } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import * as faceapi from '@vladmandic/face-api';
 
 const ROUTES = {
@@ -36,15 +37,13 @@ export default function VITHubTerminal() {
   const [isBooking, setIsBooking] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
 
-  // --- EFFECT 1: Load Models, Listeners & Razorpay Script ---
+  // Modal States
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null); 
+
+  // --- EFFECT 1: Load Models & Listeners ---
   useEffect(() => {
     let isMounted = true;
-
-    // Load Razorpay Script Dynamically
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    document.body.appendChild(script);
 
     const initModels = async () => {
       try {
@@ -146,39 +145,20 @@ export default function VITHubTerminal() {
     setPassengers(newPassengers);
   };
 
-  // --- NEW: RAZORPAY INTEGRATION ---
+  // --- MOCK RAZORPAY PAYMENT ---
   const handleRazorpayPayment = async (bookingData) => {
     setPaymentLoading(true);
-    try {
-      // 1. Create Order ID from backend
-      const res = await fetch("/api/razorpay", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: selectedSeats.length * 20 }),
-      });
-      const order = await res.json();
-
-      const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, 
-        amount: order.amount,
-        currency: "INR",
-        name: "TransitEase VIT",
-        description: `Booking for ${selectedSeats.length} Students`,
-        order_id: order.id,
-        handler: async function (response) {
-          await finalizeBooking(bookingData, "Paid (Online)");
-        },
-        prefill: { email: currentUser?.email || "student@vit.ac.in" },
-        theme: { color: "#06b6d4" },
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.open();
-    } catch (err) {
-      alert("Payment Gateway Error. Please try 'Pay Later'.");
-    } finally {
-      setPaymentLoading(false);
-    }
+    
+    // Simulate a 2.5-second secure payment processing delay
+    setTimeout(async () => {
+      try {
+        await finalizeBooking(bookingData, "Paid (Online - Mock)");
+      } catch (e) {
+        setErrorMessage("Payment Simulation Failed. Try 'Pay Later'.");
+      } finally {
+        setPaymentLoading(false);
+      }
+    }, 2500);
   };
 
   // --- CORE FINALIZATION ---
@@ -192,24 +172,26 @@ export default function VITHubTerminal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(finalData),
       });
-      alert(`Success! Ticket generated with status: ${status}`);
+      setSuccessMessage(`Success! Ticket generated with status: ${status}. The QR Code has been dispatched to your email.`);
       setSelectedSeats([]);
+      setStartStop("");
+      setEndStop("");
     } catch (e) {
-      alert("Cloud Sync Error.");
+      setErrorMessage("Cloud Sync Error.");
     }
     setIsBooking(false);
   };
 
   const handleAction = (type) => {
     if (passengers.some(p => !p.name || !p.reg) || !startStop || !endStop) 
-      return alert("Complete all passenger details.");
+      return setErrorMessage("Complete all passenger details and route stops.");
 
     const bookingData = {
       passengerDetails: passengers,
       route: selectedRoute, 
       startStop, 
       endStop,
-      userEmail: currentUser?.email || "guest@vit.edu",
+      userEmail: currentUser?.email || "aiprojectvit23@gmail.com", // Fallback test email
       timestamp: new Date().toISOString()
     };
 
@@ -219,6 +201,35 @@ export default function VITHubTerminal() {
 
   return (
     <div className="min-h-screen bg-[#0b1220] text-white p-4 font-sans flex flex-col">
+      
+      {/* ERROR MODAL */}
+      <AnimatePresence>
+        {errorMessage && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="bg-[#0f1730] border-2 border-red-500/50 p-8 rounded-[2rem] shadow-2xl max-w-sm w-full text-center">
+              <div className="text-red-500 text-4xl mb-4">!</div>
+              <h2 className="text-lg font-black uppercase mb-2 tracking-tighter text-white">Booking Error</h2>
+              <p className="text-gray-400 text-xs font-bold leading-relaxed mb-6">{errorMessage}</p>
+              <button onClick={() => setErrorMessage(null)} className="w-full bg-red-500 text-white font-black py-3 rounded-xl uppercase text-[10px] tracking-widest hover:bg-red-600 transition-colors">Acknowledge</button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* SUCCESS MODAL */}
+      <AnimatePresence>
+        {successMessage && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="bg-[#0f1730] border-2 border-green-500/50 p-8 rounded-[2rem] shadow-2xl max-w-sm w-full text-center">
+              <div className="w-16 h-16 mx-auto bg-green-500/20 text-green-500 rounded-full flex items-center justify-center text-3xl font-black mb-4">✓</div>
+              <h2 className="text-lg font-black uppercase mb-2 tracking-tighter text-white">Seats Secured</h2>
+              <p className="text-gray-400 text-xs font-bold leading-relaxed mb-6">{successMessage}</p>
+              <button onClick={() => setSuccessMessage(null)} className="w-full bg-green-500 text-black font-black py-3 rounded-xl uppercase text-[10px] tracking-widest hover:bg-green-400 transition-colors">Done</button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <header className="flex justify-between items-center bg-[#0f1730] p-4 rounded-xl mb-4 border border-cyan-500/20 shadow-2xl">
         <Link href="/city/vellore" className="text-[10px] font-black uppercase text-gray-500 hover:text-cyan-400">← Back</Link>
         <h1 className="text-xl font-black italic text-cyan-400 uppercase tracking-tighter">VIT AI Shuttle Terminal</h1>
@@ -276,11 +287,11 @@ export default function VITHubTerminal() {
           <section className="bg-[#0f1730] p-8 rounded-[2.5rem] border border-white/5 space-y-6 shadow-2xl flex-1 overflow-y-auto max-h-[450px]">
             <h2 className="text-[10px] font-black text-cyan-400 uppercase tracking-widest italic">Booking Intelligence</h2>
             <div className="grid grid-cols-2 gap-3">
-              <select value={startStop} onChange={(e)=>setStartStop(e.target.value)} className="bg-black/40 border border-white/10 p-3 rounded-xl text-[10px] outline-none">
+              <select value={startStop} onChange={(e)=>setStartStop(e.target.value)} className="bg-black/40 border border-white/10 p-3 rounded-xl text-[10px] outline-none focus:border-cyan-500">
                 <option value="">Boarding From</option>
                 {ROUTES[selectedRoute].map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-              <select value={endStop} onChange={(e)=>setEndStop(e.target.value)} className="bg-black/40 border border-white/10 p-3 rounded-xl text-[10px] outline-none">
+              <select value={endStop} onChange={(e)=>setEndStop(e.target.value)} className="bg-black/40 border border-white/10 p-3 rounded-xl text-[10px] outline-none focus:border-cyan-500">
                 <option value="">Destination</option>
                 {ROUTES[selectedRoute].map(s => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -290,8 +301,8 @@ export default function VITHubTerminal() {
               <div key={idx} className="p-4 bg-white/5 rounded-2xl space-y-3 border border-white/5">
                 <p className="text-[8px] font-black text-cyan-500 uppercase">Student {idx + 1} | Seat {p.seat}</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="text" placeholder="Full Name" className="bg-black/40 border border-white/10 p-2 rounded-lg text-[10px] outline-none" onChange={(e)=>updatePassenger(idx, "name", e.target.value)} />
-                  <input type="text" placeholder="Reg No" className="bg-black/40 border border-white/10 p-2 rounded-lg text-[10px] outline-none" onChange={(e)=>updatePassenger(idx, "reg", e.target.value)} />
+                  <input type="text" placeholder="Full Name" className="bg-black/40 border border-white/10 p-2 rounded-lg text-[10px] outline-none focus:border-cyan-500" onChange={(e)=>updatePassenger(idx, "name", e.target.value)} />
+                  <input type="text" placeholder="Reg No" className="bg-black/40 border border-white/10 p-2 rounded-lg text-[10px] outline-none focus:border-cyan-500" onChange={(e)=>updatePassenger(idx, "reg", e.target.value)} />
                 </div>
               </div>
             ))}
@@ -302,7 +313,7 @@ export default function VITHubTerminal() {
                 disabled={isBooking || paymentLoading || selectedSeats.length === 0}
                 className="w-full bg-cyan-500 text-black font-black py-4 rounded-2xl uppercase text-[10px] tracking-[0.2em] shadow-lg hover:bg-cyan-400 transition-all"
               >
-                {paymentLoading ? "Connecting Razorpay..." : `Pay Online (₹${selectedSeats.length * 20})`}
+                {paymentLoading ? "Processing Payment..." : `Pay Online (₹${selectedSeats.length * 20})`}
               </button>
               <button 
                 onClick={() => handleAction("LATER")} 
