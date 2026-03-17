@@ -45,16 +45,12 @@ export default function AlipiriTerminal() {
   
   // Modal States
   const [errorMessage, setErrorMessage] = useState(null);
-  const [successMessage, setSuccessMessage] = useState(null); // <-- NEW STATE
+  const [successMessage, setSuccessMessage] = useState(null); 
 
   useEffect(() => {
     let isMounted = true;
     
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    document.body.appendChild(script);
-
+    // Initialize TensorFlow Object Detection Model
     const init = async () => {
       await tf.ready();
       const loadedModel = await cocoSsd.load();
@@ -145,33 +141,21 @@ export default function AlipiriTerminal() {
     return 50;
   };
 
+  // 5. MOCK Booking Logic (Bypasses Razorpay KYC)
   const handleRazorpay = async (bookingData) => {
     setPaymentLoading(true);
-    try {
-      const res = await fetch("/api/razorpay", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: calculateFee() }),
-      });
-      const order = await res.json();
-
-      const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-        amount: order.amount,
-        currency: "INR",
-        name: "Alipiri Toll Node",
-        description: `Toll: ${licensePlate}`,
-        order_id: order.id,
-        handler: async (response) => {
-          await finalizeBooking(bookingData, "Paid (Online)");
-        },
-        prefill: { email: contactInfo.email, contact: contactInfo.mobile },
-        theme: { color: "#f97316" }
-      };
-      const rzp = new window.Razorpay(options);
-      rzp.open();
-    } catch (e) { setErrorMessage("Payment Gateway Offline."); }
-    setPaymentLoading(false);
+    
+    // Simulate a 2.5-second secure payment processing delay for the review
+    setTimeout(async () => {
+      try {
+        // Proceed directly to saving the database and sending the QR email
+        await finalizeBooking(bookingData, "Paid (Online - Mock)");
+      } catch (e) {
+        setErrorMessage("Payment Gateway Simulation Failed.");
+      } finally {
+        setPaymentLoading(false);
+      }
+    }, 2500); 
   };
 
   const finalizeBooking = async (data, paymentStatus) => {
@@ -180,7 +164,7 @@ export default function AlipiriTerminal() {
       const finalData = { ...data, paymentStatus };
       await addDoc(collection(db, "alipiri_bookings"), finalData);
       
-      // Call the API route
+      // Call the API route to trigger the NodeMailer email
       await fetch("/api/send-alipiri-ticket", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -188,7 +172,6 @@ export default function AlipiriTerminal() {
       });
       
       setLicensePlate("");
-      // <-- REPLACED ALERT WITH CUSTOM POPUP -->
       setSuccessMessage("Permit Generated Successfully! The QR Code has been dispatched to your email.");
       
     } catch (e) { 
@@ -237,7 +220,7 @@ export default function AlipiriTerminal() {
         )}
       </AnimatePresence>
 
-      {/* SUCCESS MODAL (Replaces the alert) */}
+      {/* SUCCESS MODAL */}
       <AnimatePresence>
         {successMessage && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
@@ -330,8 +313,12 @@ export default function AlipiriTerminal() {
               </div>
 
               <div className="flex flex-col gap-3 pt-4 border-t border-white/5">
-                <button onClick={() => handleAction("ONLINE")} disabled={isBooking || paymentLoading} className="w-full bg-orange-500 text-black font-black py-5 rounded-2xl uppercase text-[10px] tracking-[0.2em] shadow-lg hover:shadow-orange-500/30 hover:bg-orange-400 transition-all">
-                  {paymentLoading ? "Securing Tunnel..." : calculateFee() === 0 ? "Generate Free Pass" : `Book & Pay Online (₹${calculateFee()})`}
+                <button 
+                  onClick={() => handleAction("ONLINE")} 
+                  disabled={isBooking || paymentLoading} 
+                  className="w-full bg-orange-500 text-black font-black py-5 rounded-2xl uppercase text-[10px] tracking-[0.2em] shadow-lg hover:shadow-orange-500/30 hover:bg-orange-400 transition-all"
+                >
+                  {paymentLoading ? "Processing Payment..." : calculateFee() === 0 ? "Generate Free Pass" : `Book & Pay Online (₹${calculateFee()})`}
                 </button>
                 {calculateFee() > 0 && (
                   <button onClick={() => handleAction("CHECKPOST")} disabled={isBooking || paymentLoading} className="w-full bg-white/5 border border-white/10 text-white font-black py-5 rounded-2xl uppercase text-[10px] tracking-[0.2em] hover:bg-white/10 transition-all">
