@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { auth, db } from "@/lib/firebase";
 import { collection, addDoc, onSnapshot, query } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import Link from "next/link";
+import Link from "next/link"; 
 import { motion, AnimatePresence } from "framer-motion";
 import * as faceapi from '@vladmandic/face-api';
 
