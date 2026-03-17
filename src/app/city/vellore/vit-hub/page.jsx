@@ -4,9 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { auth, db } from "@/lib/firebase";
 import { collection, addDoc, onSnapshot, query } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import Link from "next/link"; 
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import * as faceapi from '@vladmandic/face-api';
 
 const ROUTES = {
   "Route 1": ["Main Gate", "Library", "SJT", "TT", "PRP", "MGB", "Girls Hostel"],
@@ -23,6 +22,7 @@ export default function VITHubTerminal() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+  const faceapiRef = useRef(null); // <-- NEW: Safely stores the AI model away from Vercel
   
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -41,12 +41,16 @@ export default function VITHubTerminal() {
   const [errorMessage, setErrorMessage] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null); 
 
-  // --- EFFECT 1: Load Models & Listeners ---
+  // --- EFFECT 1: Load Models & Listeners Safely ---
   useEffect(() => {
     let isMounted = true;
 
     const initModels = async () => {
       try {
+        // VERCEL FIX: Dynamically import face-api ONLY in the browser
+        const faceapi = await import('@vladmandic/face-api');
+        faceapiRef.current = faceapi; // Save it to the ref
+
         await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
         await faceapi.nets.ageGenderNet.loadFromUri('/models');
         if (isMounted) setIsModelLoaded(true);
@@ -106,8 +110,12 @@ export default function VITHubTerminal() {
 
   // --- EFFECT 3: Face Detection ---
   useEffect(() => {
-    if (!isModelLoaded || !videoRef.current || !canvasRef.current) return;
+    // Check if the AI library has been safely loaded into the ref first
+    if (!isModelLoaded || !videoRef.current || !canvasRef.current || !faceapiRef.current) return;
+    
+    const faceapi = faceapiRef.current; // Retrieve the safe instance
     let anim;
+    
     const loop = async () => {
       if (videoRef.current?.readyState === 4 && isCameraOn && videoRef.current.videoWidth > 0) {
         const displaySize = { width: videoRef.current.videoWidth, height: videoRef.current.videoHeight };
@@ -149,7 +157,6 @@ export default function VITHubTerminal() {
   const handleRazorpayPayment = async (bookingData) => {
     setPaymentLoading(true);
     
-    // Simulate a 2.5-second secure payment processing delay
     setTimeout(async () => {
       try {
         await finalizeBooking(bookingData, "Paid (Online - Mock)");
@@ -191,7 +198,7 @@ export default function VITHubTerminal() {
       route: selectedRoute, 
       startStop, 
       endStop,
-      userEmail: currentUser?.email || "aiprojectvit23@gmail.com", // Fallback test email
+      userEmail: currentUser?.email || "aiprojectvit23@gmail.com", 
       timestamp: new Date().toISOString()
     };
 
