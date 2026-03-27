@@ -29,10 +29,7 @@ Whenever a user asks a travel question, immediately access your vast global data
     `;
 
  // 🚀 UPGRADED TO GEMINI 3.1 (Stable for 2026)
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-3.1-flash-lite-preview",
-      systemInstruction: masterTravelPrompt
-    });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash", systemInstruction: masterTravelPrompt });
     // 4. Format history
     let formattedHistory = history.map(msg => ({
       role: msg.sender === "user" ? "user" : "model",
